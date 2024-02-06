@@ -29,44 +29,56 @@ class _MusicPlayerState extends State<MusicPlayer> {
     initMusic();
   }
 
-void initMusic() async {
-  try {
-    final credentials = SpotifyApiCredentials(
-      CustomStrings.clientId,
-      CustomStrings.clientSecret,
-    );
-    final spotify = SpotifyApi(credentials);
-    final track = await spotify.tracks.get(widget.trackId);
-
-    final tempSongName = track.name ?? '';
-    final tempArtistName = track.artists?.first.name ?? '';
-    final tempSongImage = track.album?.images?.first.url ?? '';
-    final tempArtistImage = track.artists?.first.images?.first.url ?? '';
-
-    final yt = YoutubeExplode();
-    final video = (await yt.search.search("$tempSongName $tempArtistName")).first;
-    final videoId = video.id.value;
-    final manifest = await yt.videos.streamsClient.getManifest(videoId);
-    final audioUrl = manifest.audioOnly.last.url;
-
-    setState(() {
-      music = Music(
-        trackId: track.id ?? '',
-        songName: tempSongName,
-        artistName: tempArtistName,
-        songImage: tempSongImage,
-        artistImage: tempArtistImage,
-        duration: video.duration,
+  void initMusic() async {
+    try {
+      final credentials = SpotifyApiCredentials(
+        CustomStrings.clientId,
+        CustomStrings.clientSecret,
       );
-    });
+      final spotify = SpotifyApi(credentials);
+      final track = await spotify.tracks.get(widget.trackId);
 
-    player.play(UrlSource(audioUrl.toString()));
-  } catch (e) {
-    print('Error setting source URL: $e');
-    // Handle the error here
+      final tempSongName = track.name ?? '';
+      final tempArtistName = track.artists?.first.name ?? '';
+      final tempSongImage = track.album?.images?.first.url ?? '';
+      final tempArtistImage = track.artists?.first.images?.first.url ?? '';
+
+      final yt = YoutubeExplode();
+      final video = (await yt.search.search("$tempSongName $tempArtistName")).first;
+      final videoId = video.id.value;
+      final manifest = await yt.videos.streamsClient.getManifest(videoId);
+      final audioUrl = manifest.audioOnly.first.url;
+
+      setState(() {
+        music = Music(
+          trackId: track.id ?? '',
+          songName: tempSongName,
+          artistName: tempArtistName,
+          songImage: tempSongImage,
+          artistImage: tempArtistImage,
+          duration: video.duration,
+        );
+      });
+
+      player.play(UrlSource(audioUrl.toString()));
+
+      player.onPlayerStateChanged.listen((PlayerState state) {
+        if (state == PlayerState.completed) {
+          // Seek to the beginning when the track ends
+          player.seek(const Duration());
+          player.resume();
+        }
+      });
+
+      print(audioUrl);
+      if (player.state == PlayerState.playing) {
+        print('Playing');
+      }
+    } catch (e) {
+      print('Error setting source URL: $e');
+      // Handle the error here
+    }
   }
-}
-
 
   @override
   void dispose() {
@@ -156,6 +168,7 @@ void initMusic() async {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          Expanded(child:
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -163,6 +176,8 @@ void initMusic() async {
                                 music!.songName ?? '',
                                 style: textTheme.titleLarge
                                     ?.copyWith(color: Colors.white),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                               ),
                               Text(
                                 music!.artistName ?? '-',
@@ -170,6 +185,7 @@ void initMusic() async {
                                     ?.copyWith(color: Colors.white60),
                               ),
                             ],
+                          ),
                           ),
                           const Icon(
                             Icons.favorite,

@@ -72,6 +72,9 @@ class _HomePageState extends State<HomePage> {
           .where((song) =>
               song.songName!.toLowerCase().contains(query.toLowerCase()))
           .toList();
+          if (query.isEmpty) {
+            filteredSongs = songs;
+          }
     });
   }
 
@@ -82,6 +85,7 @@ class _HomePageState extends State<HomePage> {
     );
     final spotify = SpotifyApi(credentials);
 
+  final artist = await spotify.artists.get('0OdUWJ0sBjDrqHygGUXeCF');
     final track = await spotify.tracks.get(trackId);
 
     final tempSongName = track.name ?? '';
@@ -106,21 +110,13 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[900],
       appBar: AppBar(
-        title: const Text('Home Page'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              showSearch(
-                context: context,
-                delegate: SongSearch(filteredSongs, filterSongs),
-              );
-            },
-          ),
-        ],
+        backgroundColor: Colors.grey[850],
+        title: const Text('Home Page', style: TextStyle(color: Colors.white)),
       ),
-      body: SingleChildScrollView(
+      body:  SingleChildScrollView(
+        
         child: Column(
           children: [
             const SizedBox(height: 16),
@@ -129,47 +125,65 @@ class _HomePageState extends State<HomePage> {
               child: Text(
                 'All Songs',
                 style: TextStyle(
+                  color: Colors.white,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredSongs.length,
-              itemBuilder: (context, index) {
-                final song = filteredSongs[index];
-                return ListTile(
-                  title: Text(song.songName!),
-                  leading: CircleAvatar(
-                    backgroundImage: NetworkImage(song.songImage!),
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            MusicPlayer(trackId: song.trackId),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+ListView.builder(
+  shrinkWrap: true,
+  physics: const NeverScrollableScrollPhysics(),
+  itemCount: filteredSongs.length,
+  itemBuilder: (context, index) {
+    final song = filteredSongs[index];
+    return ListTile(
+      title: Text(
+        song.songName!,
+        style: const TextStyle(color: Color.fromRGBO(255, 255, 255, 1)),
+        overflow: TextOverflow.ellipsis, // Apply text overflow handling
+      ),
+      leading: CircleAvatar(
+        backgroundImage: NetworkImage(song.songImage!),
+      ),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MusicPlayer(trackId: song.trackId),
+          ),
+        );
+      },
+    );
+  },
+),
+
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final String? newTrackId = await showDialog(
+          String? newTrackId = await showDialog(
             context: context,
             builder: (context) => AddSongDialog(),
           );
 
-          if (newTrackId != null && newTrackId.isNotEmpty) {
-            addSong(newTrackId);
-          }
+if (newTrackId != null && newTrackId.isNotEmpty) {
+    newTrackId = newTrackId.trim();
+    
+    // Check if the input is a Spotify link
+    if (newTrackId.contains('spotify.com')) {
+        // Extract the track ID from the Spotify link
+        final trackId = newTrackId.split('/').last.split('?').first;
+        
+        // Add the track using the extracted track ID
+        addSong(trackId);
+    } else {
+        // Handle the case when the input is not a Spotify link
+        // For example, you might display an error message to the user
+    }
+}
+
         },
         child: const Icon(Icons.add),
       ),
@@ -248,7 +262,7 @@ class AddSongDialog extends StatelessWidget {
       title: const Text('Add New Song'),
       content: TextField(
         controller: _textEditingController,
-        decoration: const InputDecoration(hintText: 'Enter Track ID'),
+        decoration: const InputDecoration(hintText: 'Enter Spotify Url'),
       ),
       actions: [
         TextButton(
