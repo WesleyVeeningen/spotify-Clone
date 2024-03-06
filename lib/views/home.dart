@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show Image;
 import 'package:flutter/material.dart';
 import 'package:mobile_music_player_lyrics/constants/strings.dart';
 import 'package:mobile_music_player_lyrics/models/music.dart';
@@ -14,6 +15,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late List<Music> songs = [];
   late List<Music> filteredSongs = [];
+  late List<Music> otherSongs = [];
 
   @override
   void initState() {
@@ -21,88 +23,57 @@ class _HomePageState extends State<HomePage> {
     initMusic();
   }
 
-  Future<void> initMusic() async {
-    final credentials = SpotifyApiCredentials(
+  Future<Music> fetchTrackDetails(String trackId) async {
+    final spotify = SpotifyApi(SpotifyApiCredentials(
       CustomStrings.clientId,
       CustomStrings.clientSecret,
-    );
-    final spotify = SpotifyApi(credentials);
+    ));
 
-    // List of track IDs to search for
-    List<String> trackIds = [
-      '7LoWAhcGbxSkT6trTqXQR6',
-      '7MXVkk9YMctZqd1Srtv4MB',
-      '1wVuPmvt6AWvTL5W2GJnzZ',
-      '4iJyoBOLtHqaGxP12qzhQI', // Driver's License by Olivia Rodrigo
-      '2VxeLyX666F8uXCJ0dZF8B', // Shivers by Ed Sheeran
-      '0nbXyq5TXYPCO7pr3N8S4I', // Levitating by Dua Lipa
-      '1EzrEOXmMH3G43AXT1y7pA', // Bad Habits by Ed Sheeran
-      // Add more track IDs from Spotify here
-    ];
-
-    List<Music> fetchedSongs = [];
-    for (String trackId in trackIds) {
-      final track = await spotify.tracks.get(trackId);
-
-      final tempSongName = track.name ?? '';
-      final tempArtistName = track.artists?.first.name ?? '';
-      final tempSongImage = track.album?.images?.first.url ?? '';
-      final tempArtistImage = track.artists?.first.images?.first.url ?? '';
-
-      final music = Music(
-        trackId: track.id ?? '',
-        songName: tempSongName,
-        artistName: tempArtistName,
-        songImage: tempSongImage,
-        artistImage: tempArtistImage,
-      );
-      fetchedSongs.add(music);
-    }
-
-    setState(() {
-      songs = fetchedSongs;
-      filteredSongs = songs; // Initialize filteredSongs with all songs
-    });
-  }
-
-  void filterSongs(String query) {
-    setState(() {
-      filteredSongs = songs
-          .where((song) =>
-              song.songName!.toLowerCase().contains(query.toLowerCase()))
-          .toList();
-      if (query.isEmpty) {
-        filteredSongs = songs;
-      }
-    });
-  }
-
-  void addSong(String trackId) async {
-    final credentials = SpotifyApiCredentials(
-      CustomStrings.clientId,
-      CustomStrings.clientSecret,
-    );
-    final spotify = SpotifyApi(credentials);
-
-    final artist = await spotify.artists.get(trackId);
     final track = await spotify.tracks.get(trackId);
-
     final tempSongName = track.name ?? '';
     final tempArtistName = track.artists?.first.name ?? '';
     final tempSongImage = track.album?.images?.first.url ?? '';
     final tempArtistImage = track.artists?.first.images?.first.url ?? '';
 
-    final music = Music(
+    return Music(
       trackId: track.id ?? '',
       songName: tempSongName,
       artistName: tempArtistName,
       songImage: tempSongImage,
       artistImage: tempArtistImage,
     );
+  }
+
+  Future<void> initMusic() async {
+    // List of track IDs to search for
+    List<String> trackIds = []; //<track_ids>
+
+    List<String> otherTrackIds = []; //<other_track_ids>
+
+    List<Music> fetchedSongs = [];
+    List<Music> otherFetchedSongs = [];
+
+    await Future.wait([
+      for (String trackId in trackIds)
+        fetchTrackDetails(trackId).then((music) => fetchedSongs.add(music)),
+      for (String otherTrackId in otherTrackIds)
+        fetchTrackDetails(otherTrackId)
+            .then((music) => otherFetchedSongs.add(music)),
+    ]);
+
+    setState(() {
+      songs = fetchedSongs;
+      filteredSongs = songs; // Initialize filteredSongs with all songs
+      otherSongs = otherFetchedSongs;
+    });
+  }
+
+  void addSong(String trackId) async {
+    final music = await fetchTrackDetails(trackId);
 
     setState(() {
       songs.add(music);
-      filteredSongs = songs;
+      filteredSongs = songs; // Initialize filteredSongs with all songs
     });
   }
 
@@ -132,31 +103,123 @@ class _HomePageState extends State<HomePage> {
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredSongs.length,
+              itemCount: (filteredSongs.length / 2)
+                  .ceil(), // Divide by 2 and ceil to get the number of rows needed
               itemBuilder: (context, index) {
-                final song = filteredSongs[index];
-                return ListTile(
-                  title: Text(
-                    song.songName!,
-                    style: const TextStyle(
-                        color: Color.fromRGBO(255, 255, 255, 1)),
-                    overflow:
-                        TextOverflow.ellipsis, // Apply text overflow handling
-                  ),
-                  leading: CircleAvatar(
-                    backgroundImage: NetworkImage(song.songImage!),
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            MusicPlayer(trackId: song.trackId),
+                final firstSongIndex = index * 2;
+                final secondSongIndex = firstSongIndex + 1;
+
+                // Check if the second song index exceeds the number of filtered songs
+                final hasSecondSong = secondSongIndex < filteredSongs.length;
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: ListTile(
+                        title: Text(
+                          filteredSongs[firstSongIndex].songName!,
+                          style: const TextStyle(
+                            color: Color.fromRGBO(255, 255, 255, 1),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        leading: CircleAvatar(
+                          backgroundImage: NetworkImage(
+                              filteredSongs[firstSongIndex].songImage!),
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MusicPlayer(
+                                  trackId:
+                                      filteredSongs[firstSongIndex].trackId),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    if (hasSecondSong)
+                      Expanded(
+                        child: ListTile(
+                          title: Text(
+                            filteredSongs[secondSongIndex].songName!,
+                            style: const TextStyle(
+                              color: Color.fromRGBO(255, 255, 255, 1),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          leading: CircleAvatar(
+                            backgroundImage: NetworkImage(
+                                filteredSongs[secondSongIndex].songImage!),
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MusicPlayer(
+                                    trackId:
+                                        filteredSongs[secondSongIndex].trackId),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            const Padding(
+              padding: EdgeInsets.all(0),
+              child: Text(
+                'Other Songs',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(
+                  left: 0), // Adjust the left padding as needed
+              child: SizedBox(
+                height: 200, // Adjust the height as needed
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: otherSongs.length,
+                  itemBuilder: (context, index) {
+                    final song = otherSongs[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SizedBox(
+                        width: 150, // Adjust the width as needed
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            CircleAvatar(
+                              backgroundImage: NetworkImage(song.songImage!),
+                              radius: 40,
+                            ),
+                            Text(
+                              song.songName!,
+                              style: const TextStyle(color: Colors.white),
+                              maxLines: 2, // Adjust the max lines as needed
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              song.artistName!,
+                              style: const TextStyle(color: Colors.grey),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
-                );
-              },
+                ),
+              ),
             ),
           ],
         ),
@@ -254,7 +317,7 @@ class SongSearch extends SearchDelegate<Music> {
 class AddSongDialog extends StatelessWidget {
   final TextEditingController _textEditingController = TextEditingController();
 
-  AddSongDialog({super.key});
+  AddSongDialog({Key? key});
 
   @override
   Widget build(BuildContext context) {
